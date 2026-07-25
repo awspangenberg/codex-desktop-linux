@@ -235,8 +235,10 @@ test("Codex Micro locally enables only its current upstream feature gate", () =>
 
 test("generic Statsig hook bundles are not accepted as Codex Micro assets", () => {
   const generic = currentFeatureGateFixture()
-    .replace(`const microGate=kh(\`${CODEX_MICRO_GATE_ID}\`);`, "")
+    .replace(`const microGate=Rh(\`${CODEX_MICRO_GATE_ID}\`);`, "")
     .replace(`const microRoute=\`${CODEX_MICRO_ROUTE}\`;`, "");
+  assert.equal(generic.includes(CODEX_MICRO_GATE_ID), false);
+  assert.equal(generic.includes(CODEX_MICRO_ROUTE), false);
   assert.equal(exportedFeatureGateHook(generic)?.hookName, "Rh");
   assert.equal(matchesCodexMicroFeatureGateContract(generic), false);
   assert.equal(applyCodexMicroFeatureGatePatch(generic), generic);
