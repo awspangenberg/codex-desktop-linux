@@ -67,47 +67,98 @@ change host udev policy. Install the copy staged for your install mode once.
 For a source build:
 
 ```bash
+codex_rule="codex-app/.codex-linux/features/codex-micro/70-codex-micro.rules"
+test -r "$codex_rule" || {
+  echo "The source build was not built with codex-micro enabled" >&2
+  exit 1
+}
 sudo install -Dm0644 \
-  codex-app/.codex-linux/features/codex-micro/70-codex-micro.rules \
+  "$codex_rule" \
   /etc/udev/rules.d/70-codex-micro.rules
-sudo udevadm control --reload-rules
 ```
 
 For a user-local install, use the installed app copy:
 
 ```bash
+codex_rule="$HOME/.local/opt/codex-desktop-linux/codex-app"
+codex_rule="$codex_rule/.codex-linux/features/codex-micro/70-codex-micro.rules"
+test -r "$codex_rule" || {
+  echo "The user-local app was not built with codex-micro enabled" >&2
+  exit 1
+}
 sudo install -Dm0644 \
-  "$HOME/.local/opt/codex-desktop-linux/codex-app/.codex-linux/features/codex-micro/70-codex-micro.rules" \
+  "$codex_rule" \
   /etc/udev/rules.d/70-codex-micro.rules
-sudo udevadm control --reload-rules
 ```
 
-For an AppImage, extract its staged copy first:
+For an AppImage, replace the placeholder with the image you use, then extract
+only its staged rule:
 
 ```bash
-codex_appimage="$(readlink -f ./codex-desktop-*.AppImage)"
-codex_extract_dir="$(mktemp -d)"
-trap 'rm -rf "$codex_extract_dir"' EXIT
+codex_appimage="$(readlink -f /path/to/codex-desktop.AppImage)" || exit 1
+codex_extract_dir="$(mktemp -d)" || exit 1
 (
+  set -e
+  trap 'rm -rf -- "$codex_extract_dir"' EXIT
   cd "$codex_extract_dir"
-  "$codex_appimage" --appimage-extract >/dev/null
+  "$codex_appimage" --appimage-extract \
+    'opt/codex-desktop/.codex-linux/features/codex-micro/70-codex-micro.rules' \
+    >/dev/null
+  codex_rule="$codex_extract_dir/squashfs-root/opt/codex-desktop"
+  codex_rule="$codex_rule/.codex-linux/features/codex-micro/70-codex-micro.rules"
+  test -r "$codex_rule" || {
+    echo "The AppImage was not built with codex-micro enabled" >&2
+    exit 1
+  }
+  sudo install -Dm0644 \
+    "$codex_rule" \
+    /etc/udev/rules.d/70-codex-micro.rules
 )
-sudo install -Dm0644 \
-  "$codex_extract_dir/squashfs-root/opt/codex-desktop/.codex-linux/features/codex-micro/70-codex-micro.rules" \
-  /etc/udev/rules.d/70-codex-micro.rules
-sudo udevadm control --reload-rules
 ```
 
-For Home Manager or a direct flake package, resolve the selected Nix store
-output from the installed launcher:
+For Home Manager or another installed Nix profile, resolve the selected Nix
+store output from the installed launcher:
 
 ```bash
-codex_package_root="$(
-  dirname "$(dirname "$(readlink -f "$(command -v codex-desktop)")")"
-)"
+codex_executable="$(command -v codex-desktop)" || {
+  echo "codex-desktop is not on PATH" >&2
+  exit 1
+}
+codex_executable="$(readlink -f "$codex_executable")" || exit 1
+codex_package_root="$(dirname "$(dirname "$codex_executable")")"
+codex_rule="$codex_package_root/lib/udev/rules.d/70-codex-micro.rules"
+test -r "$codex_rule" || {
+  echo "The installed Nix package was not built with codex-micro enabled" >&2
+  exit 1
+}
 sudo install -Dm0644 \
-  "$codex_package_root/lib/udev/rules.d/70-codex-micro.rules" \
+  "$codex_rule" \
   /etc/udev/rules.d/70-codex-micro.rules
+```
+
+For a direct flake build that is not installed on `PATH`, use the
+feature-enabled package output. This example assumes the usual `result`
+out-link; substitute a custom `--out-link` or the path returned by
+`--no-link --print-out-paths` when applicable:
+
+```bash
+codex_package_root="$(readlink -e ./result)" || {
+  echo "The direct flake output link does not exist" >&2
+  exit 1
+}
+codex_rule="$codex_package_root/lib/udev/rules.d/70-codex-micro.rules"
+test -r "$codex_rule" || {
+  echo "The flake output was not built with codex-micro enabled" >&2
+  exit 1
+}
+sudo install -Dm0644 \
+  "$codex_rule" \
+  /etc/udev/rules.d/70-codex-micro.rules
+```
+
+After any manual install, reload the rules and reconnect USB or Bluetooth:
+
+```bash
 sudo udevadm control --reload-rules
 ```
 
